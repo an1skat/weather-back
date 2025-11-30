@@ -1,24 +1,34 @@
 import express from "express";
 import mongoose from "mongoose";
 import dotenv from "dotenv";
+import cors from "cors";
 
-import { register, login, refresh } from "./controllers/authController.js";
+import { auth, refresh } from "./controllers/authController.js";
 import { authMiddleware } from "./middleware/authMiddleware.js";
+import {
+	addWeather,
+	deleteWeather,
+	getWeather
+} from './controllers/weatherController.js';
 
 dotenv.config();
 
 const app = express();
 
 app.use(express.json());
+app.use(cors({
+	// origin: ["http://localhost:5173", "https://an1skat.github.io/weather", "http://172.31.216.200:5173"],
+	origin: "*",
+	credentials: true,
+}))
 
-app.post("/auth/register", register);
-app.post("/auth/login", login);
+app.post("/auth", auth);
 app.post("/auth/refresh", refresh);
 app.use(authMiddleware);
 
-app.get("/user/me", (req, res) => {
-  res.json({ message: "OK", userId: req.userId });
-});
+app.post('/weather/add', addWeather);
+app.delete('/weather/delete', deleteWeather);
+app.get('/weather/:id', getWeather);
 
 mongoose
   .connect(process.env.MONGO_URI)

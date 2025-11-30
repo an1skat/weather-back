@@ -2,68 +2,94 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { User } from "../models/User.js";
 
-export const register = async (req, res) => {
-  try {
-    const { name, email, password } = req.body;
-
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
-      return res.status(400).json({ message: "Email already exists" });
-    }
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    const newUser = new User({
-      name,
-      email,
-      password: hashedPassword,
-      isAdmin: false,
-      favs: [],
-    });
-
-    await newUser.save();
-
-    res.status(201).json({ message: "User registered" });
-  } catch (error) {
-    res.status(500).json({ message: "Registration error" });
-  }
+export const auth = async (req, res) => {
+	try {
+		const { name, email, password } = req.body;
+		
+		const existingUser = await User.findOne({ email });
+		
+		if (existingUser) {
+			const isMatch = await bcrypt.compare(password, existingUser.password);
+			if (!isMatch) {
+				return res.status(400).json({ message: "Invalid password" });
+			}
+			
+			const accessToken = jwt.sign(
+				{ id: existingUser._id },
+				process.env.ACCESS_TOKEN_SECRET,
+				{ expiresIn: process.env.ACCESS_TOKEN_EXPIRES }
+			);
+			
+			const refreshToken = jwt.sign(
+				{ id: existingUser._id },
+				process.env.REFRESH_TOKEN_SECRET,
+				{ expiresIn: process.env.REFRESH_TOKEN_EXPIRES }
+			);
+			
+			return res
+				.cookie("refreshToken", refreshToken, {
+					httpOnly: true,
+					sameSite: "strict",
+					maxAge: 7 * 24 * 60 * 60 * 1000,
+				})
+				.status(200)
+				.json({
+					message: "Login successful",
+					user: {
+						name: existingUser.name,
+						email: existingUser.email,
+						favs: existingUser.favs,
+					},
+					accessToken,
+				});
+		}
+		
+		const hashedPassword = await bcrypt.hash(password, 10);
+		
+		const newUser = new User({
+			name,
+			email,
+			password: hashedPassword,
+			isAdmin: false,
+			favs: [],
+		});
+		
+		await newUser.save();
+		
+		const accessToken = jwt.sign(
+			{ id: newUser._id },
+			process.env.ACCESS_TOKEN_SECRET,
+			{ expiresIn: process.env.ACCESS_TOKEN_EXPIRES }
+		);
+		
+		const refreshToken = jwt.sign(
+			{ id: newUser._id },
+			process.env.REFRESH_TOKEN_SECRET,
+			{ expiresIn: process.env.REFRESH_TOKEN_EXPIRES }
+		);
+		
+		return res
+			.cookie("refreshToken", refreshToken, {
+				httpOnly: true,
+				sameSite: "strict",
+				maxAge: 7 * 24 * 60 * 60 * 1000,
+			})
+			.status(201)
+			.json({
+				message: "User registered",
+				user: {
+					name: newUser.name,
+					email: newUser.email,
+					favs: newUser.favs,
+				},
+				accessToken,
+			});
+	} catch (error) {
+		console.log(error);
+		return res.status(500).json({ message: "Server error" });
+	}
 };
 
-export const login = async (req, res) => {
-  try {
-    const { email, password } = req.body;
-
-    const user = await User.findOne({ email });
-    if (!user) {
-      return res.status(400).json({ message: "User not found" });
-    }
-
-    const isValidPassword = await bcrypt.compare(password, user.password);
-    if (!isValidPassword) {
-      return res.status(400).json({ message: "Invalid password" });
-    }
-
-    const accessToken = jwt.sign(
-      { id: user._id },
-      process.env.ACCESS_TOKEN_SECRET,
-      { expiresIn: process.env.ACCESS_TOKEN_EXPIRES },
-    );
-
-    const refreshToken = jwt.sign(
-      { id: user._id },
-      process.env.REFRESH_TOKEN_SECRET,
-      { expiresIn: process.env.REFRESH_TOKEN_EXPIRES },
-    );
-
-    res.json({
-      message: "Login successful",
-      accessToken,
-      refreshToken,
-    });
-  } catch (error) {
-    res.status(500).json({ message: "Login error" });
-  }
-};
 
 export const refresh = async (req, res) => {
   try {
