@@ -17,7 +17,6 @@ const app = express();
 
 app.use(express.json());
 app.use(cors({
-	// origin: ["http://localhost:5173", "https://an1skat.github.io/weather", "http://172.31.216.200:5173"],
 	origin: "*",
 	credentials: true,
 }))
